@@ -13,22 +13,31 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.post('/generation-image', upload.array('image', 3), async (req, res) => {
+app.post('/generation-image', upload.array('image', 2), async (req, res) => {
     try {
-        if (!req.files || req.files.length !== 3) {
-            return res.status(400).json({ error: 'Envie exatamente 3 imagens' });
+        const { prompt, typeproduct } = req.body;
+
+        if (!prompt || !typeproduct) {
+            return res.status(400).json({
+                error: 'prompt e typeproduct são obrigatórios'
+            });
         }
+
+        if (!req.files || req.files.length !== 2) {
+            return res.status(400).json({ error: 'Envie exatamente 2 imagens' });
+        }
+
+        console.log('typeproduct', typeproduct);
+        console.log('prompt', prompt);        
 
         const formData = new FormData();
 
-        formData.append('model', 'gpt-image-1-mini');
-        formData.append(
-            'prompt',
-            'Uma foto profissional de um cachorro usando uma coleira, com a coleira claramente visível e ajustada corretamente ao corpo do cachorro. As alças devem envolver corretamente o peito e o corpo, respeitando o formato do produto. sem pessoas ou conteúdo inapropriado. Use a terceira imagem como referência para a posição e proporção do produto no corpo do cachorro.. foco nítido, sem pessoas ou conteúdo inapropriado. (usar a terceira foto como referencia de como deve ficar no corpo do cachorro)'
-        );
-        //'Uma foto profissional de um cachorro usando coleira, em um estúdio com iluminação suave. O cachorro está totalmente visível, com texturas e cores realistas. O produto deve estar claramente visível e bem ajustado no cachorro. foco nítido, sem pessoas ou conteúdo inapropriado.'
-        formData.append('size', '1024x1024');
-        formData.append('n', '1');
+        formData.append('model', 'gpt-image-1');//afeta
+        formData.append('quality', 'medium');//afeta
+        formData.append('prompt', prompt);
+        formData.append('size', '1024x1024');//afeta
+        formData.append('n', '1');//afeta
+        formData.append('output_format', 'png');//nao afeta
 
         req.files.forEach(file => {
             formData.append('image[]', file.buffer, { filename: file.originalname });
