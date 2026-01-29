@@ -140,4 +140,8 @@ app.post('/read-image', upload.single('image'), async (req, res) => {
 });
 
 
-app.listen(8081, () => console.log('Servidor rodando em http://localhost:8081'));
+if (!process.env.VERCEL) {
+  app.listen(8081, () => {
+    console.log('Servidor rodando em http://localhost:8081');
+  });
+}
