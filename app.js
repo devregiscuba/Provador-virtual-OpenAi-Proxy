@@ -36,7 +36,7 @@ app.post('/generation-image', upload.array('image', 2), async (req, res) => {
         formData.append('model', 'gpt-image-1');//afeta
         formData.append('quality', 'medium');//afeta
         formData.append('prompt', prompt);
-        formData.append('size', '1024x1024');//afeta
+        formData.append('size', '1024x1536');//afeta
         formData.append('n', '1');//afeta
         formData.append('output_format', 'png');//nao afeta
 

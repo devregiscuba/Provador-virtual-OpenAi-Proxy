@@ -1,10 +1,14 @@
 {
   "name": "provador-virtual",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Proxy com api da openai",
+  "main": "app.js",
+  "module": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node app.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [],
   "author": "",
