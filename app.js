@@ -13,22 +13,32 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.post('/generation-image', upload.array('image', 3), async (req, res) => {
+//Gerar imagem combinadas
+app.post('/generation-image', upload.array('image', 2), async (req, res) => {
     try {
-        if (!req.files || req.files.length !== 3) {
-            return res.status(400).json({ error: 'Envie exatamente 3 imagens' });
+        const { prompt, typeproduct } = req.body;
+
+        if (!prompt || !typeproduct) {
+            return res.status(400).json({
+                error: 'prompt e typeproduct são obrigatórios'
+            });
         }
+
+        if (!req.files || req.files.length !== 2) {
+            return res.status(400).json({ error: 'Envie exatamente 2 imagens' });
+        }
+
+        console.log('typeproduct', typeproduct);
+        console.log('prompt', prompt);
 
         const formData = new FormData();
 
-        formData.append('model', 'gpt-image-1-mini');
-        formData.append(
-            'prompt',
-            'Uma foto profissional de um cachorro usando uma coleira, com a coleira claramente visível e ajustada corretamente ao corpo do cachorro. As alças devem envolver corretamente o peito e o corpo, respeitando o formato do produto. sem pessoas ou conteúdo inapropriado. Use a terceira imagem como referência para a posição e proporção do produto no corpo do cachorro.. foco nítido, sem pessoas ou conteúdo inapropriado. (usar a terceira foto como referencia de como deve ficar no corpo do cachorro)'
-        );
-        //'Uma foto profissional de um cachorro usando coleira, em um estúdio com iluminação suave. O cachorro está totalmente visível, com texturas e cores realistas. O produto deve estar claramente visível e bem ajustado no cachorro. foco nítido, sem pessoas ou conteúdo inapropriado.'
-        formData.append('size', '1024x1024');
-        formData.append('n', '1');
+        formData.append('model', 'gpt-image-1');//afeta
+        formData.append('quality', 'medium');//afeta
+        formData.append('prompt', prompt);
+        formData.append('size', '1024x1536');//afeta
+        formData.append('n', '1');//afeta
+        formData.append('output_format', 'png');//nao afeta
 
         req.files.forEach(file => {
             formData.append('image[]', file.buffer, { filename: file.originalname });
@@ -48,5 +58,86 @@ app.post('/generation-image', upload.array('image', 3), async (req, res) => {
         res.status(500).json({ error: 'Erro interno', details: err.response?.data || err.message });
     }
 });
+
+
+//Ler imagem
+app.post('/read-image', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Envie uma imagem' });
+        }
+       
+        const base64 = req.file.buffer.toString('base64');
+
+        const payload = {
+            model: 'gpt-4o-mini',
+            temperature: 0,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'extrai dados estruturados de imagens.'
+                },
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: `
+                                Leia a imagem e retorne APENAS JSON válido.
+                                Formato obrigatório:
+                                [
+                                { "id": string, "quantity": number }
+                                ]
+
+                                Regras:
+                                - NÃO use markdown
+                                - NÃO inclua texto explicativo
+                                - sempre sera id do produto e em seguida quantidade
+                                - se nao houver quantity usar 1
+                                - Ignore qualquer texto que não seja produto
+`
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:image/png;base64,${base64}`
+                            }
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const response = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            payload,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${OPENAI_API_KEY}`
+                }
+            }
+        );
+
+        if (!response.data?.choices?.[0]) {
+            return res.status(500).json({
+                error: 'Erro na resposta da OpenAI',
+                data: response.data
+            });
+        }
+
+        res.json({
+            result: response.data.choices[0].message.content
+        });
+
+    } catch (err) {
+        console.error(err.response?.data || err);
+        res.status(500).json({
+            error: 'Erro interno',
+            details: err.response?.data || err.message
+        });
+    }
+});
+
 
 app.listen(8081, () => console.log('Servidor rodando em http://localhost:8081'));
