@@ -1,19 +1,46 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const FormData = require('form-data');
 const axios = require('axios');
 
-require('dotenv').config();
-
 const app = express();
+
+/* =====================
+   Middlewares essenciais
+===================== */
 app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const upload = multer({ storage: multer.memoryStorage() });
+if (!OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY não definida');
+}
 
-//Gerar imagem combinadas
+/* =====================
+   Multer (memória)
+===================== */
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 8 * 1024 * 1024 // 8MB por imagem
+    }
+});
+
+/* =====================
+   Healthcheck
+===================== */
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', env: process.env.VERCEL ? 'vercel' : 'local' });
+});
+
+/* =====================
+   Gerar imagem combinada
+===================== */
 app.post('/generation-image', upload.array('image', 2), async (req, res) => {
     try {
         const { prompt, typeproduct } = req.body;
@@ -25,48 +52,58 @@ app.post('/generation-image', upload.array('image', 2), async (req, res) => {
         }
 
         if (!req.files || req.files.length !== 2) {
-            return res.status(400).json({ error: 'Envie exatamente 2 imagens' });
+            return res.status(400).json({
+                error: 'Envie exatamente 2 imagens'
+            });
         }
 
-        console.log('typeproduct', typeproduct);
-        console.log('prompt', prompt);
-
         const formData = new FormData();
-
-        formData.append('model', 'gpt-image-1');//afeta
-        formData.append('quality', 'medium');//afeta
+        formData.append('model', 'gpt-image-1');
+        formData.append('quality', 'medium');
         formData.append('prompt', prompt);
-        formData.append('size', '1024x1536');//afeta
-        formData.append('n', '1');//afeta
-        formData.append('output_format', 'png');//nao afeta
+        formData.append('size', '1024x1536');
+        formData.append('n', '1');
+        formData.append('output_format', 'png');
 
-        req.files.forEach(file => {
-            formData.append('image[]', file.buffer, { filename: file.originalname });
+        req.files.forEach((file) => {
+            formData.append('image[]', file.buffer, {
+                filename: file.originalname,
+                contentType: file.mimetype
+            });
         });
 
-        const response = await axios.post('https://api.openai.com/v1/images/edits', formData, {
-            headers: {
-                Authorization: `Bearer ${OPENAI_API_KEY}`,
-                ...formData.getHeaders()
+        const response = await axios.post(
+            'https://api.openai.com/v1/images/edits',
+            formData,
+            {
+                headers: {
+                    Authorization: `Bearer ${OPENAI_API_KEY}`,
+                    ...formData.getHeaders()
+                },
+                timeout: 60_000 // 🔥 evita crash da Vercel
             }
-        });
+        );
 
-        res.json(response.data);
+        return res.json(response.data);
 
     } catch (err) {
-        console.error(err.response?.data || err);
-        res.status(500).json({ error: 'Erro interno', details: err.response?.data || err.message });
+        console.error('❌ generation-image:', err.response?.data || err.message);
+        return res.status(500).json({
+            error: 'Erro ao gerar imagem',
+            details: err.response?.data || err.message
+        });
     }
 });
 
-
-//Ler imagem
+/* =====================
+   Ler imagem
+===================== */
 app.post('/read-image', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'Envie uma imagem' });
         }
-       
+
         const base64 = req.file.buffer.toString('base64');
 
         const payload = {
@@ -83,18 +120,17 @@ app.post('/read-image', upload.single('image'), async (req, res) => {
                         {
                             type: 'text',
                             text: `
-                                Leia a imagem e retorne APENAS JSON válido.
-                                Formato obrigatório:
-                                [
-                                { "id": string, "quantity": number }
-                                ]
+Leia a imagem e retorne APENAS JSON válido.
+Formato obrigatório:
+[
+  { "id": string, "quantity": number }
+]
 
-                                Regras:
-                                - NÃO use markdown
-                                - NÃO inclua texto explicativo
-                                - sempre sera id do produto e em seguida quantidade
-                                - se nao houver quantity usar 1
-                                - Ignore qualquer texto que não seja produto
+Regras:
+- NÃO use markdown
+- NÃO inclua texto explicativo
+- se não houver quantity, usar 1
+- Ignore qualquer texto que não seja produto
 `
                         },
                         {
@@ -115,33 +151,41 @@ app.post('/read-image', upload.single('image'), async (req, res) => {
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${OPENAI_API_KEY}`
-                }
+                },
+                timeout: 45_000
             }
         );
 
-        if (!response.data?.choices?.[0]) {
+        const content = response.data?.choices?.[0]?.message?.content;
+
+        if (!content) {
             return res.status(500).json({
-                error: 'Erro na resposta da OpenAI',
+                error: 'Resposta inválida da OpenAI',
                 data: response.data
             });
         }
 
-        res.json({
-            result: response.data.choices[0].message.content
-        });
+        return res.json({ result: content });
 
     } catch (err) {
-        console.error(err.response?.data || err);
-        res.status(500).json({
-            error: 'Erro interno',
+        console.error('❌ read-image:', err.response?.data || err.message);
+        return res.status(500).json({
+            error: 'Erro ao ler imagem',
             details: err.response?.data || err.message
         });
     }
 });
 
-
+/* =====================
+   Local apenas
+===================== */
 if (!process.env.VERCEL) {
-  app.listen(8081, () => {
-    console.log('Servidor rodando em http://localhost:8081');
-  });
+    app.listen(8081, () => {
+        console.log('Servidor local em http://localhost:8081');
+    });
 }
+
+/* =====================
+   EXPORT OBRIGATÓRIO
+===================== */
+module.exports = app;
