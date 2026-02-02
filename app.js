@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 if (!OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY não definida');
+    console.error('OPENAI_API_KEY não definida');
 }
 
 /* =====================
@@ -58,8 +58,8 @@ app.post('/generation-image', upload.array('image', 2), async (req, res) => {
         }
 
         const formData = new FormData();
-        formData.append('model', 'gpt-image-1');
-        formData.append('quality', 'medium');
+        formData.append('model', 'gpt-image-1-mini');
+        formData.append('quality', 'high');
         formData.append('prompt', prompt);
         formData.append('size', '1024x1536');
         formData.append('n', '1');
@@ -87,7 +87,7 @@ app.post('/generation-image', upload.array('image', 2), async (req, res) => {
         return res.json(response.data);
 
     } catch (err) {
-        console.error('❌ generation-image:', err.response?.data || err.message);
+        console.error('generation-image:', err.response?.data || err.message);
         return res.status(500).json({
             error: 'Erro ao gerar imagem',
             details: err.response?.data || err.message
