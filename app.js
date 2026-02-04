@@ -123,7 +123,7 @@ app.post('/read-image', upload.single('image'), async (req, res) => {
 Leia a imagem e retorne APENAS JSON válido.
 Formato obrigatório:
 [
-  { "id": string, "quantity": number }
+  { "partnumber": string, "quantity": number }
 ]
 
 Regras:
